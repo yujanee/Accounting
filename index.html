@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>大樓記帳統計表</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background-color: #f4f4f4; }
+    #chart-container { width: 300px; margin: 30px auto; }
+  </style>
+</head>
+<body>
+  <h2>收支月別明細統計表（圖3格式）</h2>
+  <table id="monthlyTable">
+    <thead>
+      <tr>
+        <th>收支</th><th>類別</th><th>項目</th>
+        <th>1月</th><th>2月</th><th>3月</th><th>4月</th>
+        <th>5月</th><th>6月</th><th>7月</th><th>8月</th>
+        <th>9月</th><th>10月</th><th>11月</th><th>12月</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>原始資料表格</h2>
+  <table id="dataTable">
+    <thead>
+      <tr>
+        <th>日期</th><th>類別</th><th>項目</th><th>收入</th><th>支出</th><th>備註</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h2>支出分類統計（圓餅圖）</h2>
+  <div id="chart-container">
+    <canvas id="expenseChart" width="300" height="300"></canvas>
+  </div>
+
+  <script>
+    const apiUrl = 'https://script.google.com/macros/s/AKfycbyPj4Wh4dU2xZLA95crADCLG5S5GuodC1SkPTUmYOAI7i7ArD8znGvO9gB8dO0p3Pux/exec';
+
+    fetch(apiUrl)
+      .then(res => res.json())
+      .then(data => {
+        const expenseMap = {};
+        const monthlyMap = {};
+
+        data.forEach(item => {
+          const category = item["類別"];
+          const itemName = item["項目"];
+          const date = new Date(item["日期"]);
+          const month = date.getMonth();
+          const income = parseInt(item["收入"] || 0);
+          const expense = parseInt(item["支出"] || 0);
+          const type = income > 0 ? "收入" : "支出";
+          const key = `${type}|${category}|${itemName}`;
+
+          if (!monthlyMap[key]) monthlyMap[key] = new Array(12).fill(0);
+          monthlyMap[key][month] += income + expense;
+
+          if (type === "支出") {
+            if (!expenseMap[category]) expenseMap[category] = 0;
+            expenseMap[category] += expense;
+          }
+        });
+
+        const monthlyTbody = document.querySelector('#monthlyTable tbody');
+        const groups = { '支出': [], '收入': [] };
+
+        for (const key in monthlyMap) {
+          const [type, category, itemName] = key.split('|');
+          groups[type].push({ key, category, itemName, data: monthlyMap[key] });
+        }
+
+        ["支出", "收入"].forEach(type => {
+          let total = new Array(12).fill(0);
+          groups[type].forEach(entry => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${type}</td><td>${entry.category}</td><td>${entry.itemName}</td>` +
+              entry.data.map(v => `<td>${v ? v.toLocaleString() : ""}</td>`).join("");
+            monthlyTbody.appendChild(tr);
+            for (let i = 0; i < 12; i++) total[i] += entry.data[i];
+          });
+
+          const totalTr = document.createElement('tr');
+          totalTr.style.fontWeight = 'bold';
+          totalTr.style.backgroundColor = '#eee';
+          totalTr.innerHTML = `<td>${type}</td><td colspan="2">${type}總計</td>` +
+            total.map(v => `<td>${v ? v.toLocaleString() : ""}</td>`).join("");
+          monthlyTbody.appendChild(totalTr);
+
+          const emptyTr = document.createElement('tr');
+          emptyTr.innerHTML = `<td colspan="15">&nbsp;</td>`;
+          monthlyTbody.appendChild(emptyTr);
+        });
+
+        const tbody = document.querySelector('#dataTable tbody');
+        data.forEach(row => {
+          const tr = document.createElement('tr');
+          ["日期", "類別", "項目", "收入", "支出", "備註"].forEach(key => {
+            const td = document.createElement('td');
+            td.textContent = row[key] || '';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+
+        const labels = Object.keys(expenseMap);
+        const values = Object.values(expenseMap);
+        new Chart(document.getElementById('expenseChart'), {
+          type: 'pie',
+          data: {
+            labels,
+            datasets: [{
+              label: '支出統計',
+              data: values,
+              backgroundColor: ['#ff9999','#66b3ff','#99ff99','#ffcc99','#c2c2f0'],
+            }]
+          }
+        });
+      });
+  </script>
+</body>
+</html>
